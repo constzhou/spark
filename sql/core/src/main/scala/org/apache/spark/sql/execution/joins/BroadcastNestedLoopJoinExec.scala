@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.execution.joins
 
+import org.apache.spark.{InterruptibleIterator, TaskContext}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -37,6 +38,8 @@ case class BroadcastNestedLoopJoinExec(
 
   override def leftKeys: Seq[Expression] = Nil
   override def rightKeys: Seq[Expression] = Nil
+
+  private val taskContext = TaskContext.get()
 
   override lazy val metrics = Map(
     "numOutputRows" -> SQLMetrics.createMetric(sparkContext, "number of output rows"))
@@ -106,6 +109,7 @@ case class BroadcastNestedLoopJoinExec(
       val joinedRow = new JoinedRow
 
       streamedIter.flatMap { streamedRow =>
+        taskContext.killTaskIfInterrupted()
         val joinedRows = buildRows.iterator.map(r => joinedRow(streamedRow, r))
         if (condition.isDefined) {
           joinedRows.filter(boundCondition)
@@ -129,7 +133,7 @@ case class BroadcastNestedLoopJoinExec(
       val nulls = new GenericInternalRow(broadcast.output.size)
 
       // Returns an iterator to avoid copy the rows.
-      new Iterator[InternalRow] {
+      val iter: Iterator[InternalRow] = new Iterator[InternalRow] {
         // current row from stream side
         private var streamRow: InternalRow = null
         // have found a match for current row or not
@@ -176,6 +180,7 @@ case class BroadcastNestedLoopJoinExec(
           r
         }
       }
+      new InterruptibleIterator(taskContext, iter)
     }
   }
 
@@ -194,9 +199,10 @@ case class BroadcastNestedLoopJoinExec(
       val joinedRow = new JoinedRow
 
       if (condition.isDefined) {
-        streamedIter.filter(l =>
+        streamedIter.filter { l =>
+          taskContext.killTaskIfInterrupted()
           buildRows.exists(r => boundCondition(joinedRow(l, r))) == exists
-        )
+        }
       } else if (buildRows.nonEmpty == exists) {
         streamedIter
       } else {
@@ -214,6 +220,7 @@ case class BroadcastNestedLoopJoinExec(
       if (condition.isDefined) {
         val resultRow = new GenericInternalRow(Array[Any](null))
         streamedIter.map { row =>
+          taskContext.killTaskIfInterrupted()
           val result = buildRows.exists(r => boundCondition(joinedRow(row, r)))
           resultRow.setBoolean(0, result)
           joinedRow(row, resultRow)
@@ -247,6 +254,7 @@ case class BroadcastNestedLoopJoinExec(
       val joinedRow = new JoinedRow
 
       streamedIter.foreach { streamedRow =>
+        taskContext.killTaskIfInterrupted()
         var i = 0
         while (i < buildRows.length) {
           if (boundCondition(joinedRow(streamedRow, buildRows(i)))) {
