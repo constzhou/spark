@@ -33,7 +33,6 @@ import org.apache.spark.sql.catalyst.streaming.InternalOutputModes._
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.execution.streaming.state._
-import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.streaming.{OutputMode, StateOperatorProgress}
 import org.apache.spark.sql.types._
 import org.apache.spark.util.{CompletionIterator, NextIterator, Utils}
@@ -97,7 +96,7 @@ trait StateStoreWriter extends StatefulOperator { self: SparkPlan =>
       .map(entry => entry._1 -> longMetric(entry._1).value)
 
     val javaConvertedCustomMetrics: java.util.HashMap[String, java.lang.Long] =
-      new java.util.HashMap(customMetrics.mapValues(long2Long).asJava)
+      new java.util.HashMap(customMetrics.mapValues(long2Long).toMap.asJava)
 
     new StateOperatorProgress(
       numRowsTotal = longMetric("numTotalStateRows").value,
@@ -247,7 +246,7 @@ case class StateStoreRestoreExec(
   override protected def doExecute(): RDD[InternalRow] = {
     val numOutputRows = longMetric("numOutputRows")
 
-    child.execute().mapPartitionsWithStateStore(
+    child.execute().mapPartitionsWithReadStateStore(
       getStateInfo,
       keyExpressions.toStructType,
       stateManager.getStateValueSchema,

@@ -27,7 +27,6 @@ import org.scalatest.Assertions._
 import org.apache.spark.TestUtils
 import org.apache.spark.api.python.{PythonBroadcast, PythonEvalType, PythonFunction, PythonUtils}
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.internal.config.Tests
 import org.apache.spark.sql.catalyst.expressions.{Cast, Expression}
 import org.apache.spark.sql.catalyst.plans.SQLHelper
 import org.apache.spark.sql.execution.python.UserDefinedPythonFunction
@@ -197,7 +196,7 @@ object IntegratedUDFTestUtils extends SQLHelper {
 
   lazy val pythonExec: String = {
     val pythonExec = sys.env.getOrElse(
-      "PYSPARK_DRIVER_PYTHON", sys.env.getOrElse("PYSPARK_PYTHON", "python3.6"))
+      "PYSPARK_DRIVER_PYTHON", sys.env.getOrElse("PYSPARK_PYTHON", "python3"))
     if (TestUtils.testCommandAvailable(pythonExec)) {
       pythonExec
     } else {

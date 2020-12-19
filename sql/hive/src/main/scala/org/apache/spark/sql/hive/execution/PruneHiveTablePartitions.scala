@@ -27,7 +27,6 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
-import org.apache.spark.sql.internal.SQLConf
 
 /**
  * Prune hive table partitions using partition filters on [[HiveTableRelation]]. The pruned
@@ -35,15 +34,13 @@ import org.apache.spark.sql.internal.SQLConf
  * the hive table relation will be updated based on pruned partitions.
  *
  * This rule is executed in optimization phase, so the statistics can be updated before physical
- * planning, which is useful for some spark strategy, eg.
+ * planning, which is useful for some spark strategy, e.g.
  * [[org.apache.spark.sql.execution.SparkStrategies.JoinSelection]].
  *
  * TODO: merge this with PruneFileSourcePartitions after we completely make hive as a data source.
  */
 private[sql] class PruneHiveTablePartitions(session: SparkSession)
   extends Rule[LogicalPlan] with CastSupport with PredicateHelper {
-
-  override val conf: SQLConf = session.sessionState.conf
 
   /**
    * Extract the partition filters from the filters on the table.
@@ -54,9 +51,8 @@ private[sql] class PruneHiveTablePartitions(session: SparkSession)
     val normalizedFilters = DataSourceStrategy.normalizeExprs(
       filters.filter(f => f.deterministic && !SubqueryExpression.hasSubquery(f)), relation.output)
     val partitionColumnSet = AttributeSet(relation.partitionCols)
-    ExpressionSet(normalizedFilters.filter { f =>
-      !f.references.isEmpty && f.references.subsetOf(partitionColumnSet)
-    })
+    ExpressionSet(
+      normalizedFilters.flatMap(extractPredicatesWithinOutputSet(_, partitionColumnSet)))
   }
 
   /**
@@ -103,9 +99,7 @@ private[sql] class PruneHiveTablePartitions(session: SparkSession)
   override def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperators {
     case op @ PhysicalOperation(projections, filters, relation: HiveTableRelation)
       if filters.nonEmpty && relation.isPartitioned && relation.prunedPartitions.isEmpty =>
-      val predicates = CNFWithGroupExpressionsByReference(filters.reduceLeft(And))
-      val finalPredicates = if (predicates.nonEmpty) predicates else filters
-      val partitionKeyFilters = getPartitionKeyFilters(finalPredicates, relation)
+      val partitionKeyFilters = getPartitionKeyFilters(filters, relation)
       if (partitionKeyFilters.nonEmpty) {
         val newPartitions = prunePartitions(relation, partitionKeyFilters)
         val newTableMeta = updateTableMeta(relation.tableMeta, newPartitions)

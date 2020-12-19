@@ -172,7 +172,7 @@ case class InsertIntoHiveTable(
     table.bucketSpec match {
       case Some(bucketSpec) =>
         // Writes to bucketed hive tables are allowed only if user does not care about maintaining
-        // table's bucketing ie. both "hive.enforce.bucketing" and "hive.enforce.sorting" are
+        // table's bucketing i.e. both "hive.enforce.bucketing" and "hive.enforce.sorting" are
         // set to false
         val enforceBucketingConfig = "hive.enforce.bucketing"
         val enforceSortingConfig = "hive.enforce.sorting"
@@ -245,7 +245,7 @@ case class InsertIntoHiveTable(
             if (fs.exists(partitionPath)) {
               if (!fs.delete(partitionPath, true)) {
                 throw new RuntimeException(
-                  "Cannot remove partition directory '" + partitionPath.toString)
+                  s"Cannot remove partition directory '$partitionPath'")
               }
             }
           }
@@ -311,7 +311,7 @@ case class InsertIntoHiveTable(
               if (fs.exists(path)) {
                 if (!fs.delete(path, true)) {
                   throw new RuntimeException(
-                    "Cannot remove partition directory '" + path.toString)
+                    s"Cannot remove partition directory '$path'")
                 }
                 // Don't let Hive do overwrite operation since it is slower.
                 doHiveOverwrite = false
